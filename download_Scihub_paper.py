@@ -3,8 +3,8 @@ import pandas as pd
 import requests, time, os, random
 
 # 文件路径
-csv_file_path = 'doi_Scihub.csv'
-output_folder = 'PAPER/'
+csv_file_path = 'doi_new.csv'
+output_folder = 'PAPER_new/'
 
 
 # 创建保存下载文章的文件夹
@@ -25,7 +25,6 @@ headers_list = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
 ]
-# 随机选择一个User-Agent
 headers={"User-Agent": random.choice(headers_list)}
 
 # 下载文献的函数
@@ -34,7 +33,6 @@ def download_paper(doi, output_folder):
     url = f"https://sci-hub.arizonastockbroker.com/{doi}"
     download_url = None  # 确保变量初始化
     try:
-        # 发送请求，并解析HTML
         r = requests.get(url, proxies=proxies, headers=headers, timeout=15)
         r.raise_for_status()
         r.encoding = r.apparent_encoding
@@ -57,7 +55,7 @@ def download_paper(doi, output_folder):
                         download_url = download_url.replace('\/', '/')
                         # 确保所有转义字符都被正确处理
                         download_url = download_url.replace('\\/', '/')
-                        print(f"【修正url】download_url: {download_url}")
+                        # print(f"【修正url】download_url: {download_url}")
         
         if download_url:
             print(f"Download URL found: {download_url}")
@@ -84,6 +82,6 @@ n=0
 for doi in dois:
     n+=1
     download_paper(doi, output_folder)
-    if n==3: # 【测试用，实际运行时删除该段】
-        break
+    # if n==3: # 【测试用，实际运行时删除该段】
+        # break
     time.sleep(random.uniform(1.5, 3))
