@@ -1,4 +1,4 @@
-# Readme
+# AgentTool_AI4INS
 
 ## AUTHOR: 
 
@@ -10,23 +10,115 @@
 
   进行了部分并行优化和框架梳理
 
-## 环境安装
+## 三个版本的配置
 
-`pip install -r requirements.txt -U`
+| Git 快照 | 凭据 | 浏览器驱动 |
+| --- | --- | --- |
+| draft · `1d345b2` | 无 | 无 |
+| v0.2 · `52c5bc0` | SiliconFlow API Key 用于向量化与召回，自建 Bearer 令牌用于 Dify 工具 | Edge WebDriver，仅浏览器检索脚本使用 |
+| V1.0 · `0c28e20` | 根目录 `.env` 中的 `API_KEY` 和 `AUTH_TOKEN` | Edge WebDriver，用于 `/proc` 的 CORE 检索 |
 
-### 如果遇到环境异常；提示NoModuleName literature_search
+以下命令使用 Python 3.11。在对应版本的仓库根目录运行 `python -m venv .venv`，然后在 PowerShell 执行 `.\.venv\Scripts\Activate.ps1`，在 Linux 执行 `source .venv/bin/activate`。
 
-`export PYTHONPATH=/www/wwwroot/literature_search`
+运行 `git rev-parse --git-path info/exclude` 找到本地排除文件，加入以下规则。用 `git check-ignore .env driver/msedgedriver` 确认两条路径均被排除。
 
-`/www/wwwroot/literature_search`是`.env`文件所在的目录
+```gitignore
+/.env
+/driver/
+.venv/
+PAPER/
+PAPER_all/
+PAPER_new/
+paperTry/
+EMBEDDING/
+```
 
-## 启动
+## V1.0 配置与启动
 
-`python main.py`  or `uvicorn main:app --host 0.0.0.0 --port 54123 --reload`
+### 安装 Python 依赖
+
+安装命令沿用 `requirements.txt` 的 FastAPI 和 Uvicorn 版本，`dotenv` 模块由 `python-dotenv` 提供。`lxml` 用于解析 arXiv 的 XML 响应。
+
+```sh
+python -m pip install "fastapi==0.115.7" "uvicorn[standard]==0.34.0" requests beautifulsoup4 lxml pandas numpy PyPDF2 "selenium>=4,<5" fake-useragent psutil python-dotenv
+```
+
+### 配置密钥与 `.env`
+
+- `API_KEY` 用于 SiliconFlow 中国站的向量化和重排接口。登录控制台，在「API 密钥」中新建并复制密钥。[密钥管理](https://cloud.siliconflow.cn/account/ak) · [SiliconFlow 快速上手](https://docs.siliconflow.cn/docs/userguide/quickstart)
+- `AUTH_TOKEN` 是自己生成的服务令牌。运行 `python -c "import secrets; print(secrets.token_urlsafe(32))"` 生成一个值。调用 `POST /p2` 时发送 `Authorization: Bearer <AUTH_TOKEN>`。
+
+在仓库根目录创建 `.env`，即和 `requirements.txt` 同级，并替换两个凭据占位符。
+
+```dotenv
+HOST=127.0.0.1
+PORT=54123
+API_KEY=YOUR_SILICONFLOW_API_KEY
+AUTH_TOKEN=YOUR_AUTH_TOKEN
+EMBEDDING_MODEL=BAAI/bge-m3
+RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+PARENT_MAX_TOKENS=500
+CHILD_MAX_TOKENS=200
+PARENT_DELIMITER="\n\n"
+CHILD_DELIMITER="\n"
+RERANK_TOP_N=10
+RERANK_SCORE_THRESHOLD=0
+# CONFIG_PROXY_HTTP=http://127.0.0.1:7890
+# CONFIG_PROXY_HTTPS=http://127.0.0.1:7890
+```
+
+父块和子块上限必须填正整数，分隔符保留双引号与 `\n`。`RERANK_TOP_N` 控制返回条数，`RERANK_SCORE_THRESHOLD` 当前按整数读取。下载请求需要代理时，同时设置两项 `CONFIG_PROXY_*` 并填写实际地址。
+
+### 安装 Edge 和驱动
+
+安装 Microsoft Edge，在 `edge://settings/help` 查看版本。按操作系统和架构下载 Edge WebDriver，版本号前三段须与浏览器一致。[下载 Edge WebDriver](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/) · [Microsoft 版本匹配说明](https://learn.microsoft.com/en-us/microsoft-edge/webdriver/)
+
+- **Linux**。将解压后的 `msedgedriver` 放到仓库根目录的 `driver/`。CORE 查找的浏览器为 `/usr/bin/microsoft-edge`。在根目录执行 `chmod +x driver/msedgedriver`，再用 `/usr/bin/microsoft-edge --version` 和 `./driver/msedgedriver --version` 检查。
+- **Windows**。将 `msedgedriver.exe` 放到 `driver/`，在本地的 `literature_search/main.py` 把 `driver_path` 改为 `../driver/msedgedriver.exe`，并在 `literature_search/utils/CORE.py` 将 `edge_options.binary_location` 指向实际的 `msedge.exe`（例如 `r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"`）。用 `.\driver\msedgedriver.exe --version` 检查驱动。
+
+### 启动与验证
+
+从仓库根目录执行。工作目录用于解析驱动和 `temp/` 的相对路径，`--app-dir ..` 用于导入 `literature_search` 包。
+
+```sh
+cd literature_search
+python -m uvicorn main:app --app-dir .. --host 127.0.0.1 --port 54123
+```
+
+打开 `http://127.0.0.1:54123/docs` 检查服务。`/proc` 请在本机使用，服务令牌的校验位于 `/p2`。处理已有 PDF 时，把带文本层的文件放入 `literature_search/PAPER/`，携带令牌向 `/p2` 发送 `{"func":"embedding","detail":""}`，随后发送 `{"func":"recall","detail":"查询内容"}`。
+
+## 历史版本复现
+
+从 V1.0 仓库根目录创建独立工作树，再进入对应目录配置。
+
+```sh
+git worktree add --detach ../AgentTool_AI4INS-draft 1d345b2
+git worktree add --detach ../AgentTool_AI4INS-v0.2 52c5bc0
+```
+
+### v0.2
+
+```sh
+python -m pip install requests beautifulsoup4 lxml pandas numpy PyPDF2 fastapi uvicorn "selenium>=4,<5"
+```
+
+1. **向量化与召回**。在本地 `embedding&recall.py` 中替换 `YOUR_API_KEY`，模型 ID 已配置。把带文本层的 PDF 放入根目录的 `PAPER/`，运行 `python "embedding&recall.py" --process` 生成 `EMBEDDING/`，再运行 `python "embedding&recall.py" --recall "查询内容"`。
+2. **Dify 工具**。将用到的 `DifyTool_1.py`、`DifyTool_2.py`、`DifyTool_usingTest.py` 中的 `YOUR_AUTH_TOKEN` 替换为同一自建令牌。`python DifyTool_2.py` 启动本地 `http://127.0.0.1:555/p2`，可在另一终端运行 `python DifyTool_usingTest.py` 验证。`DifyTool_1.py` 的天气演示使用 `http://127.0.0.1:554/weather`。客户端请求头填 `Authorization: Bearer <AUTH_TOKEN>`。密钥只填在本地工作树中，提交前恢复占位符。
+3. **浏览器检索**。按上文选择匹配的 Edge WebDriver，在 `search/s_CORE_results.py`、`search/s_TF_TF.py`、`search/selenium_example.py` 中把 `Service(...)` 的参数改为实际驱动路径。前两个脚本的 `download_path` 设为可写的绝对目录。独立 arXiv 和 DOI 下载脚本使用 `proxies` 中的代理地址，按本机网络配置调整。
+
+如需运行可选的 `相关杂项/getPDFtitle.py`，执行 `python -m pip install pdfplumber pytesseract pdf2image tqdm`，并将 PDF 放入 `PAPER_all/`。OCR 需要 Poppler 和含 `eng` 语言数据的 Tesseract。将可执行目录加入 `PATH`，用 `pdftoppm -v` 和 `tesseract --list-langs` 验证。[Poppler 安装说明](https://pdf2image.readthedocs.io/en/latest/installation.html) · [Tesseract 安装说明](https://tesseract-ocr.github.io/tessdoc/Installation.html)
+
+### draft
+
+```sh
+python -m pip install requests urllib3 beautifulsoup4 pandas
+```
+
+在 `download_script.py` 中配置 `search_keyword` 和 `proxies`，从仓库根目录执行 `python download_script.py`。下载脚本预设代理为 `http://127.0.0.1:7890`，请按本机地址填写，直连时将 `proxies` 设为 `None`。按 DOI 运行 `download_Scihub_paper.py` 时，根目录需有带 `DOI` 表头的 `doi_Scihub.csv`。`download_core_paper.py` 是未完成的草稿，运行 CORE 检索请用 `download_script.py`。
 
 ## API
 
-url: <http://example.com:54123/proc>
+请求地址为 `http://127.0.0.1:54123/proc`。
 
 ### search
 
