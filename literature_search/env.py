@@ -1,23 +1,18 @@
 import os
-import ast
 from pathlib import Path
 
 ####################################
 # 加载 .env 文件
 ####################################
 
-BASE_DIR = Path(__file__).parent.parent
-print(f"Base directory: {BASE_DIR}")
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 try:
-    from dotenv import find_dotenv, load_dotenv
-
-    # 加载 .env 文件
-    env_path = find_dotenv(str(BASE_DIR / ".env"))
-    load_dotenv(env_path)
-    print(f"Loaded env file: {env_path}")
+    from dotenv import load_dotenv
 except ImportError:
-    print("dotenv not installed, skipping...")
+    pass
+else:
+    load_dotenv(BASE_DIR / ".env")
 
 ####################################
 # 变量

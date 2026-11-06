@@ -2,20 +2,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import requests, time, os, random
 import re
-import fake_useragent
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from literature_search.env import (
-    CONFIG_PROXY
-)
-
-ua = fake_useragent.UserAgent()
-proxies = CONFIG_PROXY
-
-def request_url(url):
-    """封装请求方法"""
-    headers = {"User-Agent": ua.random}
-    return requests.get(url, headers=headers, proxies=proxies, timeout=30)
+from literature_search.utils.http import get as request_url
 
 def sci_download(doi: str, output_dir: str):
     """从Sci-Hub下载论文（支持动态链接解析）"""
@@ -77,13 +66,10 @@ def sci_download(doi: str, output_dir: str):
                         download_url = f"https:{download_url}"
                     print(f"embed链接: {download_url}")
 
-        download_url = raw_url.replace(r"\/", "/")
-        print(f"download_url:{download_url}")
-
         # 处理重定向，确保获取最终链接
         if download_url:
-            headers = {"User-Agent": ua.random}
-            res = requests.get(download_url, proxies=proxies, headers=headers, timeout=30, allow_redirects=True)
+            download_url = download_url.replace(r"\/", "/")
+            res = request_url(download_url)
             res.raise_for_status()
 
             # 检查最终链接是否指向 PDF

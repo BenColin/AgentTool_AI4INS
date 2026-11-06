@@ -33,14 +33,14 @@ paperTry/
 EMBEDDING/
 ```
 
-## V1.0 配置与启动
+## 当前版配置与启动
 
 ### 安装 Python 依赖
 
-安装命令沿用 `requirements.txt` 的 FastAPI 和 Uvicorn 版本，`dotenv` 模块由 `python-dotenv` 提供。`lxml` 用于解析 arXiv 的 XML 响应。
+清单包含 `fastapi`、`uvicorn[standard]`、`requests`、`urllib3`、`beautifulsoup4`、`lxml`、`pandas`、`numpy`、`PyPDF2`、`selenium`、`fake_useragent`、`psutil` 和 `python-dotenv`。
 
 ```sh
-python -m pip install "fastapi==0.115.7" "uvicorn[standard]==0.34.0" requests beautifulsoup4 lxml pandas numpy PyPDF2 "selenium>=4,<5" fake-useragent psutil python-dotenv
+python -m pip install -r requirements.txt
 ```
 
 ### 配置密钥与 `.env`
@@ -73,16 +73,16 @@ RERANK_SCORE_THRESHOLD=0
 
 安装 Microsoft Edge，在 `edge://settings/help` 查看版本。按操作系统和架构下载 Edge WebDriver，版本号前三段须与浏览器一致。[下载 Edge WebDriver](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/) · [Microsoft 版本匹配说明](https://learn.microsoft.com/en-us/microsoft-edge/webdriver/)
 
-- **Linux**。将解压后的 `msedgedriver` 放到仓库根目录的 `driver/`。CORE 查找的浏览器为 `/usr/bin/microsoft-edge`。在根目录执行 `chmod +x driver/msedgedriver`，再用 `/usr/bin/microsoft-edge --version` 和 `./driver/msedgedriver --version` 检查。
-- **Windows**。将 `msedgedriver.exe` 放到 `driver/`，在本地的 `literature_search/main.py` 把 `driver_path` 改为 `../driver/msedgedriver.exe`，并在 `literature_search/utils/CORE.py` 将 `edge_options.binary_location` 指向实际的 `msedge.exe`（例如 `r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"`）。用 `.\driver\msedgedriver.exe --version` 检查驱动。
+- **Linux**。将 `msedgedriver` 放到仓库根目录的 `driver/`，执行 `chmod +x driver/msedgedriver`，再用 `./driver/msedgedriver --version` 检查。
+- **Windows**。将 `msedgedriver.exe` 放到仓库根目录的 `driver/`，用 `.\driver\msedgedriver.exe --version` 检查。
 
 ### 启动与验证
 
-从仓库根目录执行。工作目录用于解析驱动和 `temp/` 的相对路径，`--app-dir ..` 用于导入 `literature_search` 包。
+从仓库根目录执行。进入 `literature_search/` 可继续使用该目录下的 `temp/` 会话。
 
 ```sh
 cd literature_search
-python -m uvicorn main:app --app-dir .. --host 127.0.0.1 --port 54123
+python -m uvicorn literature_search.main:app --app-dir .. --host 127.0.0.1 --port 54123
 ```
 
 打开 `http://127.0.0.1:54123/docs` 检查服务。`/proc` 请在本机使用，服务令牌的校验位于 `/p2`。处理已有 PDF 时，把带文本层的文件放入 `literature_search/PAPER/`，携带令牌向 `/p2` 发送 `{"func":"embedding","detail":""}`，随后发送 `{"func":"recall","detail":"查询内容"}`。

@@ -2,6 +2,8 @@ from selenium import webdriver
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
 import requests, time, os, random
 from io import StringIO
@@ -92,9 +94,6 @@ def download(search_param:str, driver_path:str, save_path:str, temp_dir:str):
     user_data_dir = f'{tempfile.mkdtemp(dir=temp_dir, prefix="edge_profile_")}'
     Path(user_data_dir).mkdir(exist_ok=True)
     
-    # 显式指定 Edge 二进制路径
-    edge_options.binary_location = "/usr/bin/microsoft-edge"
-    
     # 添加稳定性参数
     edge_options.add_argument(f"--user-data-dir={user_data_dir}")
     edge_options.add_argument("--no-sandbox")
@@ -118,7 +117,6 @@ def download(search_param:str, driver_path:str, save_path:str, temp_dir:str):
     try:
         wd = webdriver.Edge(service=Service(driver_path), options=edge_options)
         print("WebDriver 创建成功")
-        wd.implicitly_wait(5)
         # 打开网页
         # search_param = "(Chemical Vapor Deposition)(CVD)(Magnetic Thin Films)(Microstructure)(Magnetic Properties)"
         base_url = "https://core.ac.uk/search/?q="
@@ -130,13 +128,14 @@ def download(search_param:str, driver_path:str, save_path:str, temp_dir:str):
         web_search_url = base_url + encoded_search
         print(f"打开网页：{web_search_url}")
 
-        test_url = 'https://core.ac.uk/search/?q=%28Chemical+Vapor+Deposition%29%28CVD%29%28Magnetic+Thin+Films%29%28Microstructure%29%28Magnetic+Properties%29&page=1&sort=relevance'
         wd.get(web_search_url)
-        wd.find_element(By.XPATH, '//*[@id="__next"]/div[1]/main/div/div[2]/div[1]/div[1]/div[1]/div[1]/button').click()
-
-        wd.find_element(By.XPATH, '//*[@id="modal-root"]/div/div[2]/div/div/fieldset/div/div[2]').click()
-
-        wd.find_element(By.XPATH, '//*[@id="modal-root"]/div/div[2]/div/div/footer/button[2]').click()
+        wait = WebDriverWait(wd, 20)
+        for xpath in (
+            '//*[@id="__next"]/div[1]/main/div/div[2]/div[1]/div[1]/div[1]/div[1]/button',
+            '//*[@id="modal-root"]/div/div[2]/div/div/fieldset/div/div[2]',
+            '//*[@id="modal-root"]/div/div[2]/div/div/footer/button[2]',
+        ):
+            wait.until(EC.element_to_be_clickable((By.XPATH, xpath))).click()
 
         time.sleep(5) 
         # 至此；得到了一个 result.csv

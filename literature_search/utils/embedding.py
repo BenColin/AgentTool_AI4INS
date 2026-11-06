@@ -1,4 +1,6 @@
 import pickle
+from functools import lru_cache
+
 import requests
 from typing import List, Dict, Any
 
@@ -8,8 +10,17 @@ from literature_search.env import (
     EMBEDDING_MODEL
 )
 
-def get_embedding(text: str) -> List[float]:
-    """调用API获取文本的嵌入向量"""
+def get_embedding(text: str) -> List[float] | None:
+    """获取嵌入向量，临时失败时返回 None。"""
+    try:
+        return list(_fetch_embedding(text))
+    except Exception as e:
+        print(f"获取嵌入向量失败: {e}")
+        return None
+
+
+@lru_cache(maxsize=1024)
+def _fetch_embedding(text: str) -> tuple[float, ...]:
     url = "https://api.siliconflow.cn/v1/embeddings"
     
     payload = {
@@ -23,17 +34,13 @@ def get_embedding(text: str) -> List[float]:
         "Content-Type": "application/json"
     }
     
-    try:
-        response = requests.request("POST", url, json=payload, headers=headers)
-        if response.status_code == 200:
-            result = response.json()
-            if "data" in result and len(result["data"]) > 0:
-                return result["data"][0]["embedding"]
-        print(f"获取嵌入向量失败: {response.text}")
-        return None
-    except Exception as e:
-        print(f"获取嵌入向量时出错: {e}")
-        return None
+    response = requests.request("POST", url, json=payload, headers=headers, timeout=30)
+    response.raise_for_status()
+    data = response.json().get("data")
+    embedding = data[0].get("embedding") if data else None
+    if not isinstance(embedding, list) or not embedding:
+        raise ValueError("向量接口未返回有效向量")
+    return tuple(embedding)
     
 
 

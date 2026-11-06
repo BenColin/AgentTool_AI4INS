@@ -1,16 +1,8 @@
 from bs4 import BeautifulSoup
 import requests, time, os, random, re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import fake_useragent
-
-from literature_search.env import (
-    CONFIG_PROXY
-)
-
 from literature_search.utils.download import download_pdf
-
-ua = fake_useragent.FakeUserAgent()
-proxies = CONFIG_PROXY
+from literature_search.utils.http import get as http_get
 
 # arxiv search
 
@@ -27,8 +19,7 @@ def search(keyword, num_results=10):
     }
 
     try:
-        headers = {"User-Agent": ua.random}
-        response = requests.get(base_url, params=params, proxies=proxies, headers=headers, timeout=15)
+        response = http_get(base_url, params=params, timeout=15)
 
         if response.status_code == 200:
             results = []

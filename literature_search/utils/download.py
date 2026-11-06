@@ -1,37 +1,33 @@
-from bs4 import BeautifulSoup
-import pandas as pd
-import requests, time, os, random
-import re
-import fake_useragent
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from literature_search.env import (
-    CONFIG_PROXY
-)
+import requests
 
-ua = fake_useragent.UserAgent()
-proxies = CONFIG_PROXY
+from literature_search.utils.http import get as request_url
 
-def request_url(url):
-    """封装请求方法"""
-    headers = {"User-Agent": ua.random}
-    return requests.get(url, headers=headers, proxies=proxies, timeout=30)
 
 def download_pdf(url, save_path) -> bool:
-    """下载 PDF 文件"""
+    """流式下载 PDF，完整接收后再替换目标文件。"""
+    target = Path(save_path)
+    partial = None
     try:
-        response = request_url(url)
-        if response.status_code == 200:
-            with open(save_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024):
+        with request_url(url, stream=True) as response:
+            if response.status_code != 200:
+                print(f"下载失败，状态码: {response.status_code}")
+                return False
+            with NamedTemporaryFile(dir=target.parent, delete=False) as f:
+                partial = Path(f.name)
+                for chunk in response.iter_content(chunk_size=65536):
                     f.write(chunk)
-            print(f"PDF 已下载到 {save_path}")
-            return True
-        else:
-            print(f"下载失败，状态码: {response.status_code}")
-            return False
-    except requests.exceptions.RequestException as e:
+        partial.replace(target)
+        print(f"PDF 已下载到 {save_path}")
+        return True
+    except (requests.exceptions.RequestException, OSError) as e:
         print(f"下载时发生错误: {e}")
         return False
+    finally:
+        if partial is not None:
+            partial.unlink(missing_ok=True)
 
 
 

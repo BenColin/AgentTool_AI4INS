@@ -2,7 +2,9 @@ from fastapi import FastAPI, Request, HTTPException
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+import logging
 import os
+import re
 import subprocess
 import uvicorn
 import tempfile, shutil
@@ -10,13 +12,14 @@ from literature_search.utils import TF, CORE, sci, arxiv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from literature_search.env import (
+    BASE_DIR as PROJECT_ROOT,
     HOST,
     PORT,
     AUTH_TOKEN,
     RERANK_TOP_N
 )
 
-from embedding_and_recall import (
+from literature_search.embedding_and_recall import (
     recall,
     process_papers
 )
@@ -24,6 +27,7 @@ from embedding_and_recall import (
 
 
 app = FastAPI()
+logger = logging.getLogger("uvicorn.literature_search")
 
 @app.get('/')
 async def get():
@@ -56,19 +60,19 @@ async def execute_search_embedding_recal(request: Request):
 
     
     # 创建临时文件夹目录
-    temp_dir = Path("temp") 
+    temp_dir = Path("temp").resolve()
     temp_dir.mkdir(exist_ok=True) 
 
     # 判断是否需要创建session
     temp_path = None
-    if session == None or func == "search":
-        if func == "search" :
-            # 在 temp_dir 下创建临时目录
-            temp_path = Path(tempfile.mkdtemp(dir=temp_dir, prefix="user_request_"))
-    else:
-        temp_path = "temp" / Path(session)
+    if func == "search":
+        temp_path = Path(tempfile.mkdtemp(dir=temp_dir, prefix="user_request_"))
+    elif isinstance(session, str) and re.fullmatch(r"user_request_[a-z0-9_]+", session):
+        session_dir = temp_dir / session
+        if session_dir.is_dir() and session_dir.resolve() == session_dir:
+            temp_path = session_dir
 
-    if temp_path is None or not Path(temp_path).exists():
+    if temp_path is None:
         resp.message = "session 不存在"
         return resp
 
@@ -99,7 +103,8 @@ async def execute_search_embedding_recal(request: Request):
                 ##########################
 
                 # browser driver
-                driver_path = '../driver/msedgedriver'
+                driver_name = "msedgedriver.exe" if os.name == "nt" else "msedgedriver"
+                driver_path = str(PROJECT_ROOT / "driver" / driver_name)
 
                 # TF / CORE Search
                 # TF download 存在登陆问题；临时先不跑
@@ -108,12 +113,10 @@ async def execute_search_embedding_recal(request: Request):
                 # TF.download(detail, driver_path=driver_path, save_path=tf_download_path)
                 # TF.process_doi()
 
-                print(f"开始core download")
+                logger.info("开始 CORE 检索")
                 core_download_path = download_dir / "core"
                 core_download_path.mkdir(exist_ok=True)
-                print(f"开始core download")
                 CORE.download(detail, driver_path=driver_path, save_path=core_download_path, temp_dir=temp_dir)
-                print(f"开始process_doi")
                 CORE.process_doi(file_path=core_download_path/"results.csv", doi_path=doi_path)
 
                 ##########################
@@ -132,15 +135,15 @@ async def execute_search_embedding_recal(request: Request):
                 # 并行
 
                 def sci_task():
-                    print(f"\n[Sci] 开始下载...")
+                    logger.info("[Sci] 开始下载")
                     sci.download(doi_path=doi_path, output_dir=paper_dir)
-                    print(f"[Sci] 下载完成！")
+                    logger.info("[Sci] 下载完成")
 
                 def arxiv_task():
-                    print(f"\n[Arxiv] 开始搜索和下载...")
+                    logger.info("[arXiv] 开始搜索和下载")
                     papers = arxiv.search(detail, 20)
                     arxiv.download(papers=papers, output_dir=paper_dir)
-                    print(f"[Arxiv] 下载完成！")
+                    logger.info("[arXiv] 下载完成")
 
                 # 使用并行处理
                 with ThreadPoolExecutor(max_workers=2) as executor:
@@ -244,5 +247,4 @@ async def execute_embedding_recall(request: Request):
         }
 
 if __name__ == '__main__':
-    print(f"{HOST}:{PORT}")
-    uvicorn.run(app, host=HOST, port=PORT, reload=True, debug=True)
+    uvicorn.run(app, host=HOST or "127.0.0.1", port=PORT)
